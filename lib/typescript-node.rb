@@ -13,12 +13,14 @@ module TypeScript
         TypeScript::Src.version
       end
 
-
       def tsc(*args)
         cmd = [node, Src.tsc_path.to_s, *args]
         Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
           stdin.close
-          [wait_thr.value, stdout.read, stderr.read]
+          # Read stderror then stdout, otherwiser, you
+          # are likely to block the `node` command from exiting
+          # See: https://bugs.ruby-lang.org/issues/9082
+          [stderr.read, stdout.read, wait_thr.value]
         end
       end
 
@@ -28,14 +30,14 @@ module TypeScript
       def compile_file(source_file, *tsc_options)
         Dir.mktmpdir do |output_dir|
           output_file = File.join(output_dir, "out.js")
-          exit_status, stdout, stderr = tsc(*tsc_options, '--out', output_file, source_file)
+          stderr, stdout, exit_status = tsc(*tsc_options, '--out', output_file, source_file)
 
           output_js = File.exists?(output_file) ? File.read(output_file) : nil
           CompileResult.new(
-              output_js,
-              exit_status,
-              stdout,
-              stderr,
+            output_js,
+            exit_status,
+            stdout,
+            stderr,
           )
         end
       end
